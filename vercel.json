@@ -5,8 +5,7 @@
   "installCommand": "npm install && npx prisma generate",
   "functions": {
     "dist/server.js": {
-      "runtime": "@vercel/node@3",
-      "includeFiles": ["dist/**", "node_modules/.prisma/**", "node_modules/@prisma/client/**"]
+      "runtime": "@vercel/node@3"
     }
   }
 }
