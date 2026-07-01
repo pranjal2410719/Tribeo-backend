@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "installCommand": "npm install && npx prisma generate",
+  "functions": {
+    "dist/server.js": {
+      "runtime": "@vercel/node@3",
+      "includeFiles": ["dist/**", "node_modules/.prisma/**", "node_modules/@prisma/client/**"]
+    }
+  }
+}
