@@ -1,0 +1,115 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  fullName  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile              Profile?
+  memberships          Membership[]
+  banRecords           BanRecord[]
+  ownedCommunities     Community[]
+  moderatedMemberships Membership[] @relation("Moderator")
+}
+
+model Profile {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  username     String   @unique
+  bio          String?
+  profession   String?
+  location     String?
+  avatarUrl    String?
+  coverUrl     String?
+  githubUrl    String?
+  linkedinUrl  String?
+  websiteUrl   String?
+  portfolioUrl String?
+  skills       String[]
+  interests    String[]
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Community {
+  id         String              @id @default(uuid())
+  name       String
+  slug       String              @unique
+  description String?
+  logo       String?
+  banner     String?
+  category   String?
+  tags       String[]
+  rules      String?
+  visibility CommunityVisibility @default(PUBLIC)
+  ownerId    String
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  owner       User       @relation(fields: [ownerId], references: [id])
+  memberships Membership[]
+  banRecords  BanRecord[]
+
+  @@index([ownerId])
+}
+
+enum CommunityVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+model Membership {
+  id          String         @id @default(uuid())
+  communityId String
+  userId      String
+  role        MembershipRole @default(MEMBER)
+  status      MembershipStatus @default(PENDING)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  community   Community  @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  moderator   User?      @relation("Moderator", fields: [moderatorId], references: [id])
+  moderatorId String?
+
+  @@unique([communityId, userId])
+  @@index([communityId])
+  @@index([userId])
+}
+
+enum MembershipRole {
+  MEMBER
+  MODERATOR
+}
+
+enum MembershipStatus {
+  PENDING
+  APPROVED
+  BANNED
+}
+
+model BanRecord {
+  id          String   @id @default(uuid())
+  userId      String
+  communityId String
+  reason      String?
+  bannedById  String?
+  createdAt   DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, communityId])
+}
