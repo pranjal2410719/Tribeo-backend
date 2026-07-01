@@ -2,7 +2,5 @@
   "version": 2,
   "buildCommand": "npm run build && npx prisma generate",
   "outputDirectory": "dist",
-  "functions": {
-    "src/server.ts": {}
-  }
+  "installCommand": "npm install"
 }
