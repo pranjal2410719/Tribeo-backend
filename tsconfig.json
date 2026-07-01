@@ -10,7 +10,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "sourceMap": true,
-    "types": ["node"]
+    "types": []
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist", "api"]
