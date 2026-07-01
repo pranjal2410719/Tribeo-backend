@@ -1,4 +1,4 @@
-import { buildServer } from '../dist/app';
+import { buildServer } from '../src/app';
 
 let app: any;
 

@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import 'dotenv/config';
 import { z } from 'zod';
 
@@ -28,4 +29,4 @@ if (!parsed.success) {
   process.exit(1);
 }
 
-export const env = parsed.data;
+export const env = parsed.data!;
