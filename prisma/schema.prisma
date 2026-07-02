@@ -19,6 +19,8 @@ model User {
   banRecords           BanRecord[]
   ownedCommunities     Community[]
   moderatedMemberships Membership[] @relation("Moderator")
+  following            Follower[] @relation("Following")
+  followers            Follower[] @relation("Followers")
 }
 
 model Profile {
@@ -112,4 +114,18 @@ model BanRecord {
   community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
 
   @@unique([userId, communityId])
+}
+
+model Follower {
+  id          String   @id @default(uuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
 }

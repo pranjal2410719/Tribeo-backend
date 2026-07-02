@@ -88,12 +88,23 @@ app.get('/api/v1/profiles/me', authenticate, async (req: any, res) => {
   try {
     const profile = await prisma.profile.findUnique({
       where: { userId: req.user.id },
-      include: { user: { select: { id: true, email: true, fullName: true } } },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+            _count: { select: { followers: true, following: true } },
+          },
+        },
+      },
     });
     if (!profile) return res.status(404).json({ error: 'Profile not found' });
     res.json({
       ...profile,
       fullName: (profile as any).user?.fullName ?? null,
+      followersCount: (profile as any).user?._count?.followers ?? 0,
+      followingCount: (profile as any).user?._count?.following ?? 0,
     });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -109,10 +120,12 @@ app.get('/api/v1/profiles/:username', async (req, res) => {
           select: {
             id: true,
             email: true,
+            fullName: true,
             memberships: {
               where: { status: 'APPROVED' },
               include: { community: { select: { id: true, name: true, slug: true } } },
             },
+            _count: { select: { followers: true, following: true } },
           },
         },
       },
@@ -123,6 +136,8 @@ app.get('/api/v1/profiles/:username', async (req, res) => {
     res.json({
       ...profileData,
       fullName: user?.fullName ?? null,
+      followersCount: user?._count?.followers ?? 0,
+      followingCount: user?._count?.following ?? 0,
       user: {
         id: user.id,
         email: user.email,
@@ -370,6 +385,55 @@ app.get('/api/v1/users/me', authenticate, async (req: any, res) => {
       include: { profile: true, _count: { select: { memberships: true, ownedCommunities: true } } },
     });
     res.json(user);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Follow / Unfollow
+app.post('/api/v1/users/:userId/follow', authenticate, async (req: any, res) => {
+  try {
+    if (req.user.id === req.params.userId) {
+      return res.status(400).json({ error: 'Cannot follow yourself' });
+    }
+
+    const targetUser = await prisma.user.findUnique({ where: { id: req.params.userId } });
+    if (!targetUser) return res.status(404).json({ error: 'User not found' });
+
+    const existing = await prisma.follower.findUnique({
+      where: { followerId_followingId: { followerId: req.user.id, followingId: req.params.userId } },
+    });
+    if (existing) return res.status(409).json({ error: 'Already following' });
+
+    await prisma.follower.create({
+      data: { followerId: req.user.id, followingId: req.params.userId },
+    });
+
+    const followersCount = await prisma.follower.count({ where: { followingId: req.params.userId } });
+    res.status(201).json({ followersCount });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/v1/users/:userId/follow', authenticate, async (req: any, res) => {
+  try {
+    await prisma.follower.deleteMany({
+      where: { followerId: req.user.id, followingId: req.params.userId },
+    });
+    const followersCount = await prisma.follower.count({ where: { followingId: req.params.userId } });
+    res.json({ followersCount });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/v1/users/:userId/is-following', authenticate, async (req: any, res) => {
+  try {
+    const follow = await prisma.follower.findUnique({
+      where: { followerId_followingId: { followerId: req.user.id, followingId: req.params.userId } },
+    });
+    res.json({ isFollowing: !!follow });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
