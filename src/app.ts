@@ -88,9 +88,13 @@ app.get('/api/v1/profiles/me', authenticate, async (req: any, res) => {
   try {
     const profile = await prisma.profile.findUnique({
       where: { userId: req.user.id },
-      include: { user: { select: { id: true, email: true } } },
+      include: { user: { select: { id: true, email: true, fullName: true } } },
     });
-    res.json(profile);
+    if (!profile) return res.status(404).json({ error: 'Profile not found' });
+    res.json({
+      ...profile,
+      fullName: (profile as any).user?.fullName ?? null,
+    });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -118,6 +122,7 @@ app.get('/api/v1/profiles/:username', async (req, res) => {
     const { user, ...profileData } = profile as any;
     res.json({
       ...profileData,
+      fullName: user?.fullName ?? null,
       user: {
         id: user.id,
         email: user.email,
@@ -132,21 +137,50 @@ app.get('/api/v1/profiles/:username', async (req, res) => {
 
 app.put('/api/v1/profiles/me', authenticate, async (req: any, res) => {
   try {
-    const allowedKeys = [
+    const allowedProfileKeys = [
       'username', 'bio', 'profession', 'location', 'avatarUrl', 'coverUrl',
       'githubUrl', 'linkedinUrl', 'websiteUrl', 'portfolioUrl', 'skills', 'interests', 'isActive'
     ];
-    const updateData: any = {};
-    for (const key of allowedKeys) {
+    const allowedUserKeys = ['fullName'];
+
+    const updateProfileData: any = {};
+    for (const key of allowedProfileKeys) {
       if (req.body[key] !== undefined) {
-        updateData[key] = req.body[key];
+        updateProfileData[key] = req.body[key];
       }
     }
+
+    const updateUserData: any = {};
+    for (const key of allowedUserKeys) {
+      if (req.body[key] !== undefined) {
+        updateUserData[key] = req.body[key];
+      }
+    }
+
+    // Update profile fields
     const profile = await prisma.profile.update({
       where: { userId: req.user.id },
-      data: updateData,
+      data: updateProfileData,
     });
-    res.json(profile);
+
+    // Update user fields (fullName lives on User model)
+    if (Object.keys(updateUserData).length > 0) {
+      await prisma.user.update({
+        where: { id: req.user.id },
+        data: updateUserData,
+      });
+    }
+
+    // Return profile with user data
+    const fullProfile = await prisma.profile.findUnique({
+      where: { userId: req.user.id },
+      include: { user: { select: { id: true, email: true, fullName: true } } },
+    });
+
+    res.json({
+      ...fullProfile,
+      fullName: (fullProfile as any)?.user?.fullName ?? null,
+    });
   } catch (e: any) {
     console.error("PUT /profiles/me error:", e.message, e.stack);
     res.status(500).json({ error: e.message });
