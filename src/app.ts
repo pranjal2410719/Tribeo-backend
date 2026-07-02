@@ -15,7 +15,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Auth middleware
+// Auth middleware — also auto-creates user in local DB if missing
 async function authenticate(req: any, res: any, next: any) {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'No token provided' });
@@ -24,6 +24,28 @@ async function authenticate(req: any, res: any, next: any) {
   if (error || !data.user) return res.status(401).json({ error: 'Invalid token' });
 
   req.user = { id: data.user.id, email: data.user.email };
+
+  // Auto-sync: ensure user exists in local DB
+  try {
+    const existing = await prisma.user.findUnique({ where: { id: data.user.id } });
+    if (!existing) {
+      await prisma.user.create({
+        data: {
+          id: data.user.id,
+          email: data.user.email,
+          fullName: data.user.email?.split('@')[0] ?? null,
+          profile: {
+            create: {
+              username: (data.user.email?.split('@')[0] ?? 'user') + '_' + Date.now(),
+            },
+          },
+        },
+      });
+    }
+  } catch (e: any) {
+    console.error('[Auth] Auto-sync failed:', e.message);
+  }
+
   next();
 }
 
@@ -45,10 +67,10 @@ app.post('/api/v1/auth/sync', authenticate, async (req: any, res) => {
       data: {
         id: req.user.id,
         email: req.user.email,
+        fullName: req.user.email.split('@')[0],
         profile: {
           create: {
             username: req.user.email.split('@')[0] + '_' + Date.now(),
-            fullName: req.user.email.split('@')[0],
           },
         },
       },
@@ -62,6 +84,7 @@ app.post('/api/v1/auth/sync', authenticate, async (req: any, res) => {
 
 // Profiles
 app.get('/api/v1/profiles/me', authenticate, async (req: any, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Unauthenticated' });
   try {
     const profile = await prisma.profile.findUnique({
       where: { userId: req.user.id },
@@ -78,28 +101,54 @@ app.get('/api/v1/profiles/:username', async (req, res) => {
     const profile = await prisma.profile.findUnique({
       where: { username: req.params.username },
       include: {
-        user: { select: { id: true, email: true } },
-        memberships: {
-          where: { status: 'APPROVED' },
-          include: { community: { select: { id: true, name: true, slug: true } } },
+        user: {
+          select: {
+            id: true,
+            email: true,
+            memberships: {
+              where: { status: 'APPROVED' },
+              include: { community: { select: { id: true, name: true, slug: true } } },
+            },
+          },
         },
       },
     });
     if (!profile) return res.status(404).json({ error: 'Profile not found' });
-    res.json(profile);
+
+    const { user, ...profileData } = profile as any;
+    res.json({
+      ...profileData,
+      user: {
+        id: user.id,
+        email: user.email,
+      },
+      memberships: user.memberships || [],
+    });
   } catch (e: any) {
+    console.error("GET profile error:", e.message, e.stack);
     res.status(500).json({ error: e.message });
   }
 });
 
 app.put('/api/v1/profiles/me', authenticate, async (req: any, res) => {
   try {
+    const allowedKeys = [
+      'username', 'bio', 'profession', 'location', 'avatarUrl', 'coverUrl',
+      'githubUrl', 'linkedinUrl', 'websiteUrl', 'portfolioUrl', 'skills', 'interests', 'isActive'
+    ];
+    const updateData: any = {};
+    for (const key of allowedKeys) {
+      if (req.body[key] !== undefined) {
+        updateData[key] = req.body[key];
+      }
+    }
     const profile = await prisma.profile.update({
       where: { userId: req.user.id },
-      data: req.body,
+      data: updateData,
     });
     res.json(profile);
   } catch (e: any) {
+    console.error("PUT /profiles/me error:", e.message, e.stack);
     res.status(500).json({ error: e.message });
   }
 });
@@ -127,6 +176,7 @@ app.get('/api/v1/communities', async (req, res) => {
 
     res.json({ data: communities, meta: { page: p, limit: l, total, totalPages: Math.ceil(total / l) } });
   } catch (e: any) {
+    console.error("GET communities error:", e.message, e.stack);
     res.status(500).json({ error: e.message });
   }
 });
@@ -238,7 +288,7 @@ app.get('/api/v1/communities/:slug/members', async (req, res) => {
 
     const members = await prisma.membership.findMany({
       where: { communityId: community.id, status: 'APPROVED' },
-      include: { user: { select: { id: true, profile: { select: { username: true, fullName: true, avatarUrl: true, profession: true, skills: true } } } } },
+      include: { user: { select: { id: true, fullName: true, profile: { select: { username: true, avatarUrl: true, profession: true, skills: true } } } } },
     });
     res.json(members);
   } catch (e: any) {
