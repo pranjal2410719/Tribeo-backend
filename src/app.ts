@@ -94,17 +94,29 @@ app.get('/api/v1/profiles/me', authenticate, async (req: any, res) => {
             id: true,
             email: true,
             fullName: true,
-            _count: { select: { followers: true, following: true } },
           },
         },
       },
     });
     if (!profile) return res.status(404).json({ error: 'Profile not found' });
+
+    // Try to get follower counts (may fail if Follower table doesn't exist)
+    let followersCount = 0;
+    let followingCount = 0;
+    try {
+      const counts = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { _count: { select: { followers: true, following: true } } },
+      });
+      followersCount = counts?._count?.followers ?? 0;
+      followingCount = counts?._count?.following ?? 0;
+    } catch (_) {}
+
     res.json({
       ...profile,
       fullName: (profile as any).user?.fullName ?? null,
-      followersCount: (profile as any).user?._count?.followers ?? 0,
-      followingCount: (profile as any).user?._count?.following ?? 0,
+      followersCount,
+      followingCount,
     });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -125,19 +137,30 @@ app.get('/api/v1/profiles/:username', async (req, res) => {
               where: { status: 'APPROVED' },
               include: { community: { select: { id: true, name: true, slug: true } } },
             },
-            _count: { select: { followers: true, following: true } },
           },
         },
       },
     });
     if (!profile) return res.status(404).json({ error: 'Profile not found' });
 
+    // Try to get follower counts (may fail if Follower table doesn't exist)
+    let followersCount = 0;
+    let followingCount = 0;
+    try {
+      const counts = await prisma.user.findUnique({
+        where: { id: (profile as any).user?.id },
+        select: { _count: { select: { followers: true, following: true } } },
+      });
+      followersCount = counts?._count?.followers ?? 0;
+      followingCount = counts?._count?.following ?? 0;
+    } catch (_) {}
+
     const { user, ...profileData } = profile as any;
     res.json({
       ...profileData,
       fullName: user?.fullName ?? null,
-      followersCount: user?._count?.followers ?? 0,
-      followingCount: user?._count?.following ?? 0,
+      followersCount,
+      followingCount,
       user: {
         id: user.id,
         email: user.email,
