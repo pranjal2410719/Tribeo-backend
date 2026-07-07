@@ -1,6 +1,7 @@
 // @ts-nocheck
 import express from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import { PrismaClient } from '@prisma/client';
 import { createClient } from '@supabase/supabase-js';
 
@@ -14,6 +15,33 @@ const supabase = createClient(
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Rate limiting
+const generalLimiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000'),
+  max: parseInt(process.env.RATE_LIMIT_MAX || '100'),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' },
+});
+
+const authLimiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000'),
+  max: Math.max(1, Math.floor(parseInt(process.env.RATE_LIMIT_MAX || '100') / 5)),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many auth attempts, please try again later' },
+});
+
+const searchLimiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000'),
+  max: Math.max(1, Math.floor(parseInt(process.env.RATE_LIMIT_MAX || '100') / 3)),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many search requests, please try again later' },
+});
+
+app.use(generalLimiter);
 
 // Auth middleware — also auto-creates user in local DB if missing
 async function authenticate(req: any, res: any, next: any) {
@@ -55,7 +83,7 @@ app.get('/api/v1/health', (_req, res) => {
 });
 
 // Auth sync
-app.post('/api/v1/auth/sync', authenticate, async (req: any, res) => {
+app.post('/api/v1/auth/sync', authLimiter, authenticate, async (req: any, res) => {
   try {
     const existing = await prisma.user.findUnique({
       where: { id: req.user.id },
@@ -369,7 +397,7 @@ app.get('/api/v1/communities/:slug/members', async (req, res) => {
 });
 
 // Search
-app.get('/api/v1/search/communities', async (req, res) => {
+app.get('/api/v1/search/communities', searchLimiter, async (req, res) => {
   try {
     const { q, category } = req.query as any;
     const where: any = {};
@@ -386,7 +414,7 @@ app.get('/api/v1/search/communities', async (req, res) => {
   }
 });
 
-app.get('/api/v1/search/people', async (req, res) => {
+app.get('/api/v1/search/people', searchLimiter, async (req, res) => {
   try {
     const { q, skills } = req.query as any;
     const where: any = { isActive: true };

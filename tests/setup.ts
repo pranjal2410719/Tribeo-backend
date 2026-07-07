@@ -11,7 +11,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   try {
-    await prisma.$executeRawUnsafe(`TRUNCATE TABLE "User", "Profile", "Community", "Membership", "BanRecord" CASCADE;`);
+    await prisma.$executeRawUnsafe(`TRUNCATE TABLE "User", "Profile", "Community", "Membership", "BanRecord", "Follower" CASCADE;`);
   } catch (err) {
     // Silently ignore or print if verbose
   }
