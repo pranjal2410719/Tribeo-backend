@@ -283,14 +283,14 @@ app.get('/api/v1/communities', async (req, res) => {
 
 app.post('/api/v1/communities', authenticate, async (req: any, res) => {
   try {
-    const { name, description, category, tags, rules, visibility } = req.body;
+    const { name, description, category, tags, rules, visibility, whatsappLink } = req.body;
     const slug = name.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, '');
 
     const existing = await prisma.community.findUnique({ where: { slug } });
     if (existing) return res.status(409).json({ error: 'Community already exists' });
 
     const community = await prisma.community.create({
-      data: { name, slug, description, category, tags, rules, visibility: visibility || 'PUBLIC', ownerId: req.user.id,
+      data: { name, slug, description, category, tags, rules, visibility: visibility || 'PUBLIC', ownerId: req.user.id, whatsappLink,
         memberships: { create: { userId: req.user.id, role: 'MEMBER', status: 'APPROVED' } },
       },
       include: { _count: { select: { memberships: { where: { status: 'APPROVED' } } } } },
@@ -376,6 +376,29 @@ app.delete('/api/v1/communities/:slug/leave', authenticate, async (req: any, res
 
     await prisma.membership.deleteMany({ where: { communityId: community.id, userId: req.user.id } });
     res.status(204).send();
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/v1/communities/:slug/whatsapp-joined', authenticate, async (req: any, res) => {
+  try {
+    const community = await prisma.community.findUnique({ where: { slug: req.params.slug } });
+    if (!community) return res.status(404).json({ error: 'Not found' });
+
+    const membership = await prisma.membership.update({
+      where: {
+        communityId_userId: {
+          communityId: community.id,
+          userId: req.user.id,
+        },
+      },
+      data: {
+        whatsappJoined: true,
+        whatsappJoinedAt: new Date(),
+      },
+    });
+    res.json(membership);
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

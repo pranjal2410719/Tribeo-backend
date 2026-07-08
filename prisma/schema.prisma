@@ -57,6 +57,7 @@ model Community {
   rules      String?
   visibility CommunityVisibility @default(PUBLIC)
   ownerId    String
+  whatsappLink String?
   createdAt  DateTime            @default(now())
   updatedAt  DateTime            @updatedAt
 
@@ -78,6 +79,8 @@ model Membership {
   userId      String
   role        MembershipRole @default(MEMBER)
   status      MembershipStatus @default(PENDING)
+  whatsappJoined Boolean     @default(false)
+  whatsappJoinedAt DateTime?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
